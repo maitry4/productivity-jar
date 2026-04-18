@@ -4,12 +4,12 @@
     {
       "date": "2026-04-18",
       "tasks": [
-        { "id": "2026-04-18-1", "label": "Cryptarithmetic",              "done": false },
-        { "id": "2026-04-18-2", "label": "Sum of Fractions",             "done": false },
-        { "id": "2026-04-18-3", "label": "Almost Matching Substrings",   "done": false },
-        { "id": "2026-04-18-4", "label": "Article",                      "done": false },
-        { "id": "2026-04-18-5", "label": "FruitFlow (Layered)",          "done": false },
-        { "id": "2026-04-18-6", "label": "CN 1 Slide",                   "done": false }
+        { "id": "2026-04-18-1", "label": "Cryptarithmetic",            "done": false },
+        { "id": "2026-04-18-2", "label": "Sum of Fractions",           "done": false },
+        { "id": "2026-04-18-3", "label": "Almost Matching Substrings", "done": false },
+        { "id": "2026-04-18-4", "label": "Article",                    "done": false },
+        { "id": "2026-04-18-5", "label": "FruitFlow (Layered)",        "done": false },
+        { "id": "2026-04-18-6", "label": "CN 1 Slide",                 "done": false }
       ]
     }
   ]

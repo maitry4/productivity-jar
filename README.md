@@ -1,6 +1,4 @@
-# 🫙 The Jar — Setup Guide
-
-A beautiful daily task tracker. Tasks live in JSONBin, site deploys on Vercel. Your API key never touches the browser.
+# 🫙 The Jar — Setup Guide (Firebase + Vercel)
 
 ---
 
@@ -9,79 +7,102 @@ A beautiful daily task tracker. Tasks live in JSONBin, site deploys on Vercel. Y
 ```
 thejar/
 ├── public/
-│   └── index.html          ← the site
+│   └── index.html           ← the site
 ├── api/
-│   ├── getTasks.js         ← serverless: reads from JSONBin
-│   └── updateTasks.js      ← serverless: writes to JSONBin
-├── vercel.json             ← routing config
-├── initial-data.json       ← paste this into JSONBin to start
+│   ├── auth.js              ← verifies password, returns token
+│   ├── getTasks.js          ← reads from Firestore (public)
+│   └── updateTasks.js       ← writes to Firestore (token required)
+├── vercel.json
+├── package.json
+├── initial-data.json        ← paste this into Firestore to start
 └── README.md
 ```
 
 ---
 
-## Step 1 — Create your JSONBin
+## Step 1 — Firebase Setup
 
-1. Go to **https://jsonbin.io** and sign up (free)
-2. Click **Create Bin**
-3. Paste the contents of `initial-data.json` as the bin content
-4. Set the bin to **Private** (toggle in the top right)
-5. Click **Create Bin**
-6. Copy the **Bin ID** from the URL — it looks like `6621f3abc2a35f059865ab12`
-7. Go to **API Keys** (top nav) → copy your **Secret Key** (starts with `$2b$...`)
-
----
-
-## Step 2 — Deploy to Vercel
-
-1. Push this folder to a GitHub repo (can be private)
-2. Go to **https://vercel.com** → Import Project → select your repo
-3. Leave all build settings as default (Vercel auto-detects the serverless functions)
-4. Before deploying, go to **Settings → Environment Variables** and add:
-
-   | Name                | Value                          |
-   |---------------------|--------------------------------|
-   | `JSONBIN_BIN_ID`    | your bin ID from Step 1        |
-   | `JSONBIN_API_KEY`   | your secret key from Step 1    |
-
-5. Click **Deploy** — done! ✅
-
-Your site will be live at `https://your-project.vercel.app`
+1. Go to **https://console.firebase.google.com** → Create a project (no analytics needed)
+2. Go to **Firestore Database** → Create database → Start in **test mode** (we'll secure it via the API, not Firestore rules)
+3. Go to **Project Settings → Service Accounts → Generate new private key**
+   - This downloads a JSON file. You'll need three values from it:
+   - `project_id`
+   - `client_email`
+   - `private_key`
+4. In Firestore, create a document manually:
+   - Collection: `jar`
+   - Document ID: `tasks`
+   - Add a field: `data` (type: string) → paste the entire contents of `initial-data.json` as the value
+   - Add a field: `updatedAt` (type: string) → today's date e.g. `2026-04-18`
 
 ---
 
-## Daily Workflow
+## Step 2 — Vercel Setup
 
-Every morning:
-1. Open your site
-2. Click the **✏️ button** (bottom right corner)
-3. Type today's tasks — one per line
-4. Hit **Save to Jar**
+1. Push this folder to a GitHub repo
+2. Import to **https://vercel.com** → select the repo
+3. Go to **Settings → Environment Variables** and add all five:
 
-Tasks are saved to JSONBin through your secure Vercel API. Check them off during the day — each check persists immediately. The jar fills up over time. 🫙
+| Name                     | Value                                      |
+|--------------------------|--------------------------------------------|
+| `FIREBASE_PROJECT_ID`    | `project_id` from service account JSON     |
+| `FIREBASE_CLIENT_EMAIL`  | `client_email` from service account JSON   |
+| `FIREBASE_PRIVATE_KEY`   | `private_key` from service account JSON (include the `-----BEGIN...` lines, paste as-is) |
+| `SITE_PASSWORD`          | your chosen password (only you know this)  |
+| `TOKEN_SECRET`           | any long random string e.g. `xK9#mP2$qL8` |
+
+4. Deploy → done ✅
 
 ---
 
-## How the data flows
+## How it works
 
+### API calls per day
+- **Morning (first load):** 1 read from Firestore → cached in localStorage
+- **All day:** check/uncheck only touches localStorage — 0 API calls
+- **Midnight:** 1 write to Firestore with final state
+- **Total: 2 calls/day** → 10,000 free Firestore reads/day means effectively unlimited
+
+### Auth flow
 ```
-Browser
-  │
-  ├─► GET /api/getTasks ──────────► JSONBin (with secret key) ──► returns JSON
-  │
-  └─► PUT /api/updateTasks ───────► JSONBin (with secret key) ──► saves JSON
+You enter password
+  → POST /api/auth (password never stored in JS)
+  → Vercel checks against SITE_PASSWORD env var
+  → Returns a daily HMAC token
+  → Stored in localStorage (if "remember me") or sessionStorage
+  → Token sent with every write request
+  → Visitors without token can VIEW but not check/uncheck
 ```
 
-The secret key only ever exists in Vercel's environment — never in your HTML or JS source.
+### Midnight sync
+- A timer fires at exactly midnight
+- Pushes the day's localStorage state to Firestore
+- If tab was closed at midnight, the next morning's load catches up and syncs yesterday first
 
 ---
 
-## Adding past dates manually
+## Adding tasks each morning
 
-If you want to backfill, use the admin panel and pick any date. Tasks are sorted automatically.
+1. Go to **Firebase Console → Firestore → jar → tasks**
+2. Edit the `data` field (it's a JSON string)
+3. Add a new day block to the `days` array:
+
+```json
+{
+  "date": "2026-04-19",
+  "tasks": [
+    { "id": "2026-04-19-1", "label": "Your task", "done": false },
+    { "id": "2026-04-19-2", "label": "Another task", "done": false }
+  ]
+}
+```
+
+4. Save → refresh the site next morning → new slips appear
 
 ---
 
-## Resetting / starting fresh
+## Notes
 
-Just create a new JSONBin with fresh `initial-data.json` content and update your `JSONBIN_BIN_ID` env var in Vercel.
+- The `FIREBASE_PRIVATE_KEY` env var must preserve newlines. Paste it exactly as it appears in the downloaded JSON (Vercel handles this correctly).
+- If you rotate your password, update `SITE_PASSWORD` in Vercel and redeploy. Old tokens expire naturally at midnight anyway.
+- Firestore free tier: 50,000 reads/day, 20,000 writes/day — more than enough for lifetime personal use.
